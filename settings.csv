@@ -1,0 +1,5 @@
+username,test
+password,test
+ontologyURL,http://www.drugtargetontology.org/dto
+ontologyShortName,dto
+dateFormat,d MMM yyyy
