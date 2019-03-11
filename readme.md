@@ -2,9 +2,9 @@
 
 OntoJog is a java based program to automatically generate owl files from delimited text files, database tables, or directly from Ontofox.
 
-After compiling, the main use of Ontojog is to generate or QC an ontology using OntoJog’s swing based GUI . It’s designed to allow for rapid development and iteration of ontologies via the use of a pseudo triples store in a mysql relational database keeping.  The database tracks classes  terms, definitions, external annotations and cross references, and simple axioms as well and assigns and tracks IDs to prevent conflicts. OntoJob also supports the generation to ontology modules. Edits to the database can be made quickly and by multiple users. Keeping the data in a single structured relational database facilitates systematic development, building, and QC of ontology modules.
+After compiling, the main use of OntoJog is to generate or QC an ontology using OntoJog’s swing based GUI . It is designed to allow for rapid development and iteration of ontologies via the use of a pseudo triples store in a mysql relational database keeping.  The database tracks classes  terms, definitions, external annotations and cross references, and simple axioms as well and assigns and tracks IDs to prevent conflicts. OntoJog also supports the generation to ontology modules. Edits to the database can be made quickly and by multiple users. Keeping the data in a single structured relational database facilitates systematic development, building, and QC of ontology modules.
 
-Ontojog has been used to develop Drug Target Ontology and us also used to maintain both Drug Target Ontology and BioAssay Ontology.
+OntoJog has been used to develop Drug Target Ontology (DTO) and us also used to maintain both DTO and BioAssay Ontology (BAO).
 
 # Required Libraries
 
