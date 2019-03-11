@@ -194,9 +194,10 @@ public class BaoImporter implements Runnable{
         sqlDB = conn.prepareStatement("SELECT module FROM entity WHERE label = ? ");
         rs1 = sqlDB.executeQuery("select module,substr(id from 5 for 3) as idGroup,max(substr(id from 8)) as nextID  from entity group by module,substr(id from 5 for 3);");
         while (rs1.next()) {
-            if(!rs1.getString("idGroup").equals("000")){
+            if(!rs1.getString("idGroup").equals("000") && isNumeric(rs1.getString("idGroup"))){
                 String next = rs1.getString("nextID");
-                if(!next.contains("_")) {
+                Integer id = Integer.parseInt(next);
+                if(!next.contains("_") && (!nextID.containsKey(rs1.getString("idGroup"))||nextID.get(rs1.getString("idGroup")) < id)) {
                     nextID.put(rs1.getString("idGroup"),Integer.parseInt(next) );
                 }
             }
@@ -235,8 +236,8 @@ public class BaoImporter implements Runnable{
                             if (parentID.contains("\\")) {
                                 parentID = parentID.substring(parentID.lastIndexOf("#") + 1);
                             }
-                            sqlDB = conn.prepareStatement("SELECT module FROM entity WHERE label = ? ");
-                            sqlDB.setString(1, row[parentColumnIndex]);
+                            sqlDB = conn.prepareStatement("SELECT module FROM entity WHERE id = ? ");
+                            sqlDB.setString(1, row[parentIndex]);
                             System.out.println(row[parentColumnIndex]);
                             rs1 = sqlDB.executeQuery();
                             if (rs1.next()) {
@@ -317,5 +318,8 @@ public class BaoImporter implements Runnable{
             }
             conn.setAutoCommit(true);
         }
+    }
+    public boolean isNumeric(String s) {
+        return s != null && s.matches("[-+]?\\d*\\.?\\d+");
     }
 }

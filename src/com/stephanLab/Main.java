@@ -34,6 +34,15 @@ public class Main {
                 frame.pack();
                 frame.setVisible(true);
             } else {
+                if(argArray.containsKey("action")){
+                    if(argArray.get("action").equals("qc")){
+                        OwlCompare comp = new OwlCompare();
+                        comp.setSettings(argArray);
+                        comp.run();
+
+                    }
+                    return;
+                }
                 if (argArray.containsKey("updateFile")) {
                     BaoImporter gen = new BaoImporter();
                     gen.setSettings(argArray);

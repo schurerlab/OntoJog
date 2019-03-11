@@ -50,6 +50,7 @@ public class OwlGenerator implements Runnable {
 
     private ArrayList<String> moduleBlacklist = new ArrayList<>();
     private ArrayList<String> moduleWhitelist = new ArrayList<>();
+    private ArrayList<String> classBlacklist = new ArrayList<>();
 
 
     private Map<String, String> modules = new HashMap<>();
@@ -111,6 +112,10 @@ public class OwlGenerator implements Runnable {
 
         if (args.containsKey("onlyModules")) {
             moduleWhitelist = new ArrayList<String>(Arrays.asList(args.get("onlyModules").split(",")));
+        }
+
+        if (args.containsKey("ignoreClasses")) {
+            classBlacklist = new ArrayList<String>(Arrays.asList(args.get("ignoreClasses").split(",")));
         }
 
         if (args.containsKey("cleanDB")) {
@@ -197,7 +202,7 @@ public class OwlGenerator implements Runnable {
                     removeRedundant();
 
 
-                    String statement = "INSERT INTO relationship (entityid,property,value,restriction) SELECT relationship3.entityid,relationship3.property,relationship3.`value`,relationship3.restriction FROM relationship3";
+                    String statement = "INSERT INTO relationship (entityid,property,value,restriction) SELECT relationship3.entityid,relationship3.property,relationship3.value,relationship3.restriction FROM relationship3";
                     Statement sqlQ = conn.createStatement();
                     sqlQ.execute(statement);
                 }
@@ -209,7 +214,7 @@ public class OwlGenerator implements Runnable {
                 try {
                     outputString("Generate Owl Modules");
                     generateModules();
-                    generateExternalModules();
+//                    generateExternalModules();
                 } catch (Exception e) {
                     e.printStackTrace();
                     System.exit(1);
@@ -246,11 +251,11 @@ public class OwlGenerator implements Runnable {
             sqlQ.execute("DROP TABLE IF EXISTS relationship;");
             sqlQ.execute("DROP TABLE IF EXISTS equivalence;");
         }
-        //add the ontology tables
+    /*    //add the ontology tables
         sqlQ.execute("create table IF NOT EXISTS entity(id varchar(255), label varchar(255), module varchar(255));");
         sqlQ.execute("create table IF NOT EXISTS entityinfo(id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,entityid varchar(255), property_label varchar(255), property_type varchar(255), value varchar(255)); ");
         sqlQ.execute("create table IF NOT EXISTS relationship(id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,entityid varchar(255), property varchar(255), value varchar(255), restriction varchar(255),collection int(255));");
-        sqlQ.execute("create table IF NOT EXISTS equivalence(id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,entityid varchar(255), property varchar(255), value varchar(255), restriction varchar(255),collection int(255));");
+        sqlQ.execute("create table IF NOT EXISTS equivalence(id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,entityid varchar(255), property varchar(255), value varchar(255), restriction varchar(255),collection int(255));");*/
     }
 
     private void loadSettings() throws Exception {
@@ -272,7 +277,7 @@ public class OwlGenerator implements Runnable {
                     "No columns defined in given CSV file." +
                             "Please check the CSV file format.");
         }
-        while(null != headerRow)
+        while(null != headerRow && headerRow.length >=2)
         {
             settings.put(headerRow[0],headerRow[1]);
             headerRow = csvReader.readNext();
@@ -1233,7 +1238,7 @@ public class OwlGenerator implements Runnable {
             buffer.write("\t\t\t<owl:Class>\n");
             buffer.write("\t\t\t\t<owl:intersectionOf rdf:parseType=\"Collection\">\n");
             while(collectionResource.next()){
-                if (collectionResource.getString("value").contains("DTO")) {
+                if (collectionResource.getString("value").toLowerCase().contains(settings.getOrDefault("ontologyShortName","DTO").toLowerCase())) {
                     Resource = ontologyURL+settings.getOrDefault("idSeperator","/");
                 } else if (collectionResource.getString("value").toLowerCase().startsWith("http")) {
                     Resource = "";
@@ -1241,7 +1246,7 @@ public class OwlGenerator implements Runnable {
                     Resource = "http://purl.obolibrary.org/obo/";
                 }
 
-                if (collectionResource.getString("property").contains("DTO")) {
+                if (collectionResource.getString("property").toLowerCase().contains(settings.getOrDefault("ontologyShortName","DTO").toLowerCase())) {
                     propResource = ontologyURL+settings.getOrDefault("idSeperator","/");
                 } else if (collectionResource.getString("property").toLowerCase().startsWith("http")) {
                     propResource = "";
@@ -1325,6 +1330,90 @@ public class OwlGenerator implements Runnable {
             ExtraTab ="";
         }
     }
+    private void retrieveRelations(BufferedWriter bw,String whereClause)  throws Exception {
+        Statement stmt1 = conn.createStatement();
+        ResultSet rs1 = stmt1.executeQuery("select distinct e.id,e.module  from entity e order by id");
+
+
+        Statement stmt2 = conn.createStatement();
+        Statement stmt3 = conn.createStatement();
+
+        ResultSet rs2;
+
+        ResultSet rs3 = null;
+
+        while (rs1.next()) {
+            String module = rs1.getString("module");
+            if (!moduleBlacklist.isEmpty() && moduleBlacklist.contains(module)) {
+                continue;
+            }
+
+            if (!moduleWhitelist.isEmpty() && !moduleWhitelist.contains(module)) {
+                continue;
+            }
+
+            if(!classBlacklist.isEmpty() && classBlacklist.contains(rs1.getString("id"))){
+                continue;
+            }
+
+            boolean hasStarted = false;
+            String SQL = "select * FROM equivalence r where r.entityid='" + rs1.getString("id")+"'";
+            if(!whereClause.equals(""))
+                SQL+=" AND "+ whereClause;
+            SQL+=" order by id,r.property";
+            rs2 = stmt2.executeQuery(SQL);
+
+            ArrayList<String> ignore = new ArrayList<>();
+
+            while (rs2.next()) {
+                if (ignore.contains(rs2.getString("id")))
+                    continue;
+
+                if(!classBlacklist.isEmpty() && classBlacklist.contains(rs2.getString("value"))){
+                    continue;
+                }
+
+                if (rs2.getString("collection") != null)
+                    rs3 = stmt3.executeQuery("select * FROM equivalence r where r.collection='" + rs2.getString("collection") + "' order by id,r.property");
+                if (!hasStarted) {
+                    bw.write("\t<owl:Class rdf:about=\"" + ontologyURL + settings.getOrDefault("idSeperator", "/") + rs1.getString("id") + "\">\n");
+                    hasStarted = true;
+                }
+                bw.write("\t\t<owl:equivalentClass>\n");
+                outputRelation(bw, rs2, ignore, rs3);
+                bw.write("\t\t</owl:equivalentClass>\n");
+            }
+            SQL = "select * FROM relationship r where r.entityid='" + rs1.getString("id") +"'";
+            if(!whereClause.equals(""))
+                SQL+=" AND "+ whereClause;
+            SQL+=" order by id,r.property";
+            rs2 = stmt2.executeQuery(SQL);
+            rs3 = null;
+            ignore.clear();
+            while (rs2.next()) {
+                if (ignore.contains(rs2.getString("id")))
+                    continue;
+
+                if(!classBlacklist.isEmpty() && classBlacklist.contains(rs2.getString("value"))){
+                    continue;
+                }
+
+                if (rs2.getString("collection") != null)
+                    rs3 = stmt3.executeQuery("select * FROM relationship r where r.collection='" + rs2.getString("collection") + "' order by id,r.property");
+                if (!hasStarted) {
+                    bw.write("\t<owl:Class rdf:about=\"" + ontologyURL + settings.getOrDefault("idSeperator", "/") + rs1.getString("id") + "\">\n");
+                    hasStarted = true;
+                }
+                bw.write("\t\t<rdfs:subClassOf>\n");
+                outputRelation(bw, rs2, ignore, rs3);
+                bw.write("\t\t</rdfs:subClassOf>\n");
+            }
+            DecimalFormat df = new DecimalFormat("#.#");
+            df.setRoundingMode(RoundingMode.CEILING);
+            if (hasStarted)
+                bw.write("\t</owl:Class>\n\n");
+        }
+    }
 
     private void generateRelations()  throws Exception {
         String ontologyShortName = settings.getOrDefault("ontologyShortName","")+"_";
@@ -1332,12 +1421,10 @@ public class OwlGenerator implements Runnable {
         String moduleName = RelationFile;
 
         try {
-            Statement stmt1 = conn.createStatement();
             Statement stmt2 = conn.createStatement();
             Statement stmt3 = conn.createStatement();
 
             try {
-                ResultSet rs1 = stmt1.executeQuery("select distinct e.id,e.module  from entity e order by id");
 
                 ResultSet rs2;
 
@@ -1345,41 +1432,77 @@ public class OwlGenerator implements Runnable {
                 rs2 = stmt2.executeQuery("select count(*) FROM equivalence");
                 rs2.next();
                 int equivCount = rs2.getInt(1);
-                int equivComplete = 0;
-                float equivLastOutput = 9;
                 outputString(equivCount + " total equivalence axioms !");
 
                 rs2 = stmt2.executeQuery("select count(*) FROM relationship");
                 rs2.next();
                 int relationCount = rs2.getInt(1);
-                int relationComplete = 0;
-                float relationLastOutput = 9;
                 outputString(relationCount + " total relationship axioms !");
 
                 File file;
-                if(RelationFile == null ||RelationFile.equals("") ) {
-                    file = new File(destDir + "/"+ontologyShortName+"automated_axioms.owl");
-                }else{
-                    file = new File(destDir + "/"+ontologyShortName+RelationFile+".owl");
-                }
-                if (!file.exists()) {file.createNewFile();}
-                FileWriter fw = new FileWriter(file.getAbsoluteFile());
-                BufferedWriter bw = new BufferedWriter(fw);
-                bw.write(generateOwlHeader(moduleName));
-                bw.write("\n");
+                FileWriter fw;
+                BufferedWriter bw;
+                if(!settings.getOrDefault("internalRelationFile","").equals("") && !settings.getOrDefault("externalRelationFile","").equals("")){
+                    file = new File(destDir + "/"+settings.get("internalRelationFile")+".owl");
+                    if (!file.exists()) {file.createNewFile();}
+                    fw = new FileWriter(file.getAbsoluteFile());
+                    bw = new BufferedWriter(fw);
+                    bw.write(generateOwlHeader(settings.get("internalRelationFile")));
+                    bw.write("\n");
+                    bw.write("    <!--\n");
+                    bw.write("    ///////////////////////////////////////////////////////////////////////////////////////\n");
+                    bw.write("    //\n");
+                    bw.write("    // Generated Axioms\n");
+                    bw.write("    //\n");
+                    bw.write("    ///////////////////////////////////////////////////////////////////////////////////////\n");
+                    bw.write("     -->\n\n");
 
+                    retrieveRelations(bw," property LIKE 'BAO_%' AND (value LIKE 'BAO_%' or restriction = 'value')");
+                    bw.write("</rdf:RDF>");
+                    bw.close();
+                    file = new File(destDir + "/"+settings.get("externalRelationFile")+".owl");
+                    if (!file.exists()) {file.createNewFile();}
+                    fw = new FileWriter(file.getAbsoluteFile());
+                    bw = new BufferedWriter(fw);
+                    bw.write(generateOwlHeader(settings.get("externalRelationFile")));
+                    bw.write("\n");
+                    bw.write("    <!--\n");
+                    bw.write("    ///////////////////////////////////////////////////////////////////////////////////////\n");
+                    bw.write("    //\n");
+                    bw.write("    // Generated Axioms\n");
+                    bw.write("    //\n");
+                    bw.write("    ///////////////////////////////////////////////////////////////////////////////////////\n");
+                    bw.write("     -->\n\n");
+                    retrieveRelations(bw," property NOT LIKE 'BAO_%' or (value NOT LIKE 'BAO_%' AND restriction != 'value')");
+                    bw.write("</rdf:RDF>");
+                    bw.close();
+                }else {
+                    if (RelationFile == null || RelationFile.equals("")) {
+                        file = new File(destDir + "/" + ontologyShortName + "automated_axioms.owl");
+                    } else {
+                        file = new File(destDir + "/" + ontologyShortName + RelationFile + ".owl");
+                    }
+                    if (!file.exists()) {
+                        file.createNewFile();
+                    }
+                    fw = new FileWriter(file.getAbsoluteFile());
+                    bw = new BufferedWriter(fw);
+                    bw.write(generateOwlHeader(moduleName));
+                    bw.write("\n");
+                    retrieveRelations(bw, "");
+                    bw.write("</rdf:RDF>");
+                    bw.close();
+                }
+
+
+/* Not currently sure what this is for
+
+                rs1 = stmt1.executeQuery("select distinct e.entityid as id,e.property from equivalence e where not exists( select id from entity where id = e.entityid) order by id,e.property");
 
                 while(rs1.next()){
-                    String module = rs1.getString("module");
-                    if(!moduleBlacklist.isEmpty() && moduleBlacklist.contains(module)){
-                        continue;
-                    }
 
-                    if(!moduleWhitelist.isEmpty() && !moduleWhitelist.contains(module)){
-                        continue;
-                    }
                     boolean hasStarted = false;
-                    rs2 = stmt2.executeQuery("select * FROM equivalence r where r.entityid=\"" + rs1.getString("id") + "\" order by id,r.property");
+                    rs2 = stmt2.executeQuery("select * FROM equivalence r where r.entityid='" + rs1.getString("id") + "' order by id,r.property");
 
                     ArrayList<String> ignore = new ArrayList<>();
 
@@ -1387,69 +1510,7 @@ public class OwlGenerator implements Runnable {
                         if (ignore.contains(rs2.getString("id")))
                             continue;
                         if (rs2.getString("collection") != null)
-                            rs3 = stmt3.executeQuery("select * FROM equivalence r where r.collection=\"" + rs2.getString("collection") + "\" order by id,r.property");
-                        if(!hasStarted){
-                            bw.write("\t<owl:Class rdf:about=\""+ontologyURL+settings.getOrDefault("idSeperator","/")+  rs1.getString("id") + "\">\n");
-                            hasStarted = true;
-                        }
-                        bw.write("\t\t<owl:equivalentClass>\n");
-                        outputRelation(bw,rs2,ignore,rs3);
-                        equivComplete++;
-                        bw.write("\t\t</owl:equivalentClass>\n");
-                    }
-                    float percentDoneEquiv = 0;
-                    if(equivCount>0){
-                        percentDoneEquiv =(float)equivComplete/equivCount;
-                    }
-
-                    rs2 = stmt2.executeQuery("select * FROM relationship r where r.entityid=\"" + rs1.getString("id") + "\" order by id,r.property");
-                    rs3 = null;
-                    ignore.clear();
-                    while(rs2.next()) {
-                        if (ignore.contains(rs2.getString("id")))
-                            continue;
-                        if (rs2.getString("collection") != null)
-                            rs3 = stmt3.executeQuery("select * FROM relationship r where r.collection=\"" + rs2.getString("collection") + "\" order by id,r.property");
-                        if(!hasStarted){
-                            bw.write("\t<owl:Class rdf:about=\""+ontologyURL+settings.getOrDefault("idSeperator","/") + rs1.getString("id") + "\">\n");
-                            hasStarted = true;
-                        }
-                        bw.write("\t\t<rdfs:subClassOf>\n");
-                        outputRelation(bw,rs2,ignore,rs3);
-                        bw.write("\t\t</rdfs:subClassOf>\n");
-                        relationComplete++;
-                    }
-                    DecimalFormat df = new DecimalFormat("#.#");
-                    df.setRoundingMode(RoundingMode.CEILING);
-                    float percentDoneRelationship = 0;
-                    if(relationCount>0){
-                        percentDoneRelationship =(float)relationComplete/relationCount;
-                    }
-                    if(Float.parseFloat(df.format(percentDoneEquiv)) > equivLastOutput ||Float.parseFloat(df.format(percentDoneRelationship)) > relationLastOutput) {
-                        outputString((percentDoneRelationship*100)+"% completed relationship " +(percentDoneEquiv*100)+"% completed equivelence ");
-                        equivLastOutput = Float.parseFloat(df.format(percentDoneEquiv));
-                        relationLastOutput = Float.parseFloat(df.format(percentDoneRelationship));
-                    }
-                    if(hasStarted)
-                        bw.write("\t</owl:Class>\n\n");
-                }
-
-
-
-                rs1 = stmt1.executeQuery("select distinct e.entityid as id from relationship e where not exists( select id from entity where id = e.entityid) order by id,e.property");
-
-                while(rs1.next()){
-
-                    boolean hasStarted = false;
-                    rs2 = stmt2.executeQuery("select * FROM equivalence r where r.entityid=\"" + rs1.getString("id") + "\" order by id,r.property");
-
-                    ArrayList<String> ignore = new ArrayList<>();
-
-                    while(rs2.next()) {
-                        if (ignore.contains(rs2.getString("id")))
-                            continue;
-                        if (rs2.getString("collection") != null)
-                            rs3 = stmt3.executeQuery("select * FROM equivalence r where r.collection=\"" + rs2.getString("collection") + "\" order by id,r.property");
+                            rs3 = stmt3.executeQuery("select * FROM equivalence r where r.collection='" + rs2.getString("collection") + "'order by id,r.property");
                         if(!hasStarted){
                             bw.write("\t<owl:Class rdf:about=\""+ontologyURL+settings.getOrDefault("idSeperator","/")+  rs1.getString("id") + "\">\n");
                             hasStarted = true;
@@ -1460,14 +1521,14 @@ public class OwlGenerator implements Runnable {
                         bw.write("\t\t</owl:equivalentClass>\n");
                     }
 
-                    rs2 = stmt2.executeQuery("select * FROM relationship r where r.entityid=\"" + rs1.getString("id") + "\" order by id,r.property");
+                    rs2 = stmt2.executeQuery("select * FROM relationship r where r.entityid='" + rs1.getString("id") + "' order by id,r.property");
                     rs3 = null;
                     ignore.clear();
                     while(rs2.next()) {
                         if (ignore.contains(rs2.getString("id")))
                             continue;
                         if (rs2.getString("collection") != null)
-                            rs3 = stmt3.executeQuery("select * FROM relationship r where r.collection=\"" + rs2.getString("collection") + "\" order by id,r.property");
+                            rs3 = stmt3.executeQuery("select * FROM relationship r where r.collection='" + rs2.getString("collection") + "' order by id,r.property");
                         if(!hasStarted){
                             bw.write("\t<owl:Class rdf:about=\""+ontologyURL+settings.getOrDefault("idSeperator","/") + rs1.getString("id") + "\">\n");
                             hasStarted = true;
@@ -1480,9 +1541,7 @@ public class OwlGenerator implements Runnable {
                     if(hasStarted)
                         bw.write("\t</owl:Class>\n\n");
                 }
-
-                bw.write("</rdf:RDF>");
-                bw.close();
+*/
                 outputString("Module \"" + file.getName() + "\" was generated successfully!");
             }
             catch (IOException e) {
@@ -1503,8 +1562,12 @@ public class OwlGenerator implements Runnable {
             Statement stmt = conn.createStatement();
             Statement stmt2 = conn.createStatement();
             try {
-
-                ResultSet rs = stmt.executeQuery("select distinct module from external where module is not null order by id");
+                /*
+                ResultSet rs = stmt.executeQuery("SHOW TABLES LIKE 'external'");
+                if(!rs.next()){
+                    return;
+                }*/
+                ResultSet rs = stmt.executeQuery("select distinct module from external where module is not null");
                 while (rs.next()) {
                     if(Thread.currentThread().isInterrupted()){
                         return;
@@ -1604,7 +1667,7 @@ public class OwlGenerator implements Runnable {
             try {
 
                 // Get all current modules in the database
-                ResultSet rs = stmt.executeQuery("select distinct module from entity where module is not null order by id");
+                ResultSet rs = stmt.executeQuery("select distinct module from entity where module is not null");
                 while (rs.next()) {
                     if(Thread.currentThread().isInterrupted()){
                         return;
@@ -1643,7 +1706,7 @@ public class OwlGenerator implements Runnable {
 
 
                     //get annotations not from external sources
-                    ResultSet rs2 = stmt2.executeQuery("SELECT distinct entityinfo.property_label from entity INNER JOIN entityinfo ON entityinfo.entityid= entity.id WHERE module ='" + rs.getString("module") + "' AND entityinfo.property_type='annotation_property' order by entity.id,entityinfo.property_label");
+                    ResultSet rs2 = stmt2.executeQuery("SELECT distinct entityinfo.property_label from entity INNER JOIN entityinfo ON entityinfo.entityid= entity.id WHERE module ='" + rs.getString("module") + "' AND entityinfo.property_type='annotation_property' order by entityinfo.property_label");
                     while (rs2.next()) {
                         if(Thread.currentThread().isInterrupted()){
                             return;
@@ -1677,8 +1740,12 @@ public class OwlGenerator implements Runnable {
                     //write classes
                     rs2 = stmt2.executeQuery("SELECT id,label FROM entity WHERE module ='" + rs.getString("module") + "' order by id");
                     while (rs2.next()) {
+
                         if(Thread.currentThread().isInterrupted()){
                             return;
+                        }
+                        if(!classBlacklist.isEmpty() && classBlacklist.contains(rs2.getString("id"))){
+                            continue;
                         }
                         //if the class doesn't start with the ontology address igore it
                         if(!rs2.getString("id").toLowerCase().startsWith(settings.getOrDefault("ontologyShortName","DTO").toLowerCase())) {
@@ -1842,6 +1909,7 @@ public class OwlGenerator implements Runnable {
         String dateFormat = settings.getOrDefault("dateFormat","d MMM yyyy");
         SimpleDateFormat date = new SimpleDateFormat(dateFormat);
         header = header.replace("$date$",date.format(new Date()));
+        header = header.replace("$version$",settings.getOrDefault("version","1.0"));
 
 
         return header;

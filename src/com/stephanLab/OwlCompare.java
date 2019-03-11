@@ -9,6 +9,7 @@ import org.semanticweb.owlapi.reasoner.NodeSet;
 import org.semanticweb.owlapi.reasoner.OWLReasoner;
 import org.semanticweb.owlapi.reasoner.OWLReasonerFactory;
 import org.semanticweb.owlapi.reasoner.structural.StructuralReasonerFactory;
+import com.google.common.base.Optional;
 
 import javax.swing.text.InternationalFormatter;
 import javax.swing.text.html.HTMLDocument;
@@ -114,7 +115,8 @@ public class OwlCompare implements Runnable {
                 }
                 String GroupID = key;
                 String lastSubID = lastID.get(key);
-                outputQC(GroupID + lastSubID + "\t\t\t" + onto1.get(settings.get("ontologyShortName").toUpperCase() + "_" + GroupID + lastSubID).get("label"));
+                if(onto1.get(settings.get("ontologyShortName").toUpperCase() + "_" + GroupID + lastSubID) != null)
+                    outputQC(GroupID + lastSubID + "\t\t\t" + onto1.get(settings.get("ontologyShortName").toUpperCase() + "_" + GroupID + lastSubID).get("label"));
             }
             outputQC("--------------------------------------");
             outputQC("");
