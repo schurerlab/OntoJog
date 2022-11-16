@@ -1,4 +1,4 @@
-package com.stephanLab;
+package stephanLab;
 
 import javax.swing.*;
 import java.util.HashMap;
@@ -6,9 +6,6 @@ import java.util.Map;
 
 public class Main {
     public static void main(String[] args) {
-
-
-
         try {
             Map<String, String> argArray = new HashMap<>();
             for (int i = 0; i < args.length; i++) {
@@ -63,7 +60,4 @@ public class Main {
         }
 
     }
-
-
-
 }

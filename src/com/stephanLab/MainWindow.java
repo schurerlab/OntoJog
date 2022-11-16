@@ -1,4 +1,4 @@
-package com.stephanLab;
+package stephanLab;
 
 import org.apache.commons.lang3.ObjectUtils;
 

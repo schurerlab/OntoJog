@@ -1,25 +1,15 @@
 
-package com.stephanLab;
+package stephanLab;
 
 import au.com.bytecode.opencsv.CSVReader;
-import com.google.common.base.Optional;
 import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.model.*;
-import org.semanticweb.owlapi.reasoner.NodeSet;
 import org.semanticweb.owlapi.reasoner.OWLReasoner;
 import org.semanticweb.owlapi.reasoner.OWLReasonerFactory;
 import org.semanticweb.owlapi.reasoner.structural.StructuralReasonerFactory;
-import com.google.common.base.Optional;
 
-import javax.swing.text.InternationalFormatter;
-import javax.swing.text.html.HTMLDocument;
-import javax.swing.text.html.Option;
-import java.awt.peer.SystemTrayPeer;
 import java.io.*;
-import java.net.URI;
-import java.net.URLEncoder;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
 
 /**
  * Created by John on 12/27/2016.
@@ -264,7 +254,7 @@ public class OwlCompare implements Runnable {
                 OWLReasoner reasoner = configuredReasoner.createReasoner(currentOntology);
                 Set<OWLClass> classes = currentOntology.getClassesInSignature();
                 for (OWLClass aclass : classes) { // Get the annotations on the class that use the label property
-                    Optional<String> IDOptional = aclass.getIRI().getRemainder();
+                    java.util.Optional<String> IDOptional = aclass.getIRI().getRemainder();
                     if(IDOptional.isPresent()) {
                         String ID = IDOptional.get();
                         if (dataStorage.containsKey(ID) && !ID.equals("Thing")) {
@@ -278,7 +268,7 @@ public class OwlCompare implements Runnable {
                         dataStorage.get(ID).put("ID", ID);
                         Iterator<OWLClass> itClass = reasoner.getSuperClasses(aclass, true).getFlattened().iterator();
                         if (itClass.hasNext()) {
-                            Optional<String> parent = itClass.next().getIRI().getRemainder();
+                            java.util.Optional<String> parent = itClass.next().getIRI().getRemainder();
                             if (parent.isPresent()) {
                                 dataStorage.get(ID).put("parentClass", parent.get());
                                 dataStorage.get(ID).put("parentClassResource", reasoner.getSuperClasses(aclass, true).getFlattened().iterator().next().getIRI().getNamespace());
@@ -288,7 +278,7 @@ public class OwlCompare implements Runnable {
                         for (OWLOntology o : currentOntology.getImportsClosure()) {
                             Set<OWLAnnotationAssertionAxiom> a = o.getAnnotationAssertionAxioms(aclass.getIRI());
                             for (OWLAnnotationAssertionAxiom annotation : a) {
-                                Optional<OWLLiteral> optionalV = annotation.getValue().asLiteral();
+                                java.util.Optional<OWLLiteral> optionalV = annotation.getValue().asLiteral();
                                 if(!optionalV.isPresent()){
                                     continue;
                                 }

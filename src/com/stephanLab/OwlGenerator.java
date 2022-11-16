@@ -1,4 +1,4 @@
-package com.stephanLab;
+package stephanLab;
 
 import java.io.BufferedWriter;
 import java.io.File;
