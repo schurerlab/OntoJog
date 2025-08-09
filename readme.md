@@ -1,3 +1,4 @@
+[OntoTrot](https://github.com/schurerlab/OntoTrot), an improved version of [OntoJog](https://github.com/schurerlab/OntoJog) designed to be a more advanced ontology generation tool.
 # OntoJog
 
 OntoJog is a java based program to automatically generate owl files from delimited text files, database tables, or directly from Ontofox.
